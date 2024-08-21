@@ -77,6 +77,15 @@ func (r *UserRepository) getUserByID(ctx context.Context, tx *gorm.DB, userID in
 	return r.UserMapper.ToDO(userPo), nil
 }
 
+func (r *UserRepository) GetUserByUsername(ctx context.Context, username string) (*entity.User, error) {
+	userPO, _ := r.UserDao.GetByUsername(ctx, r.db, username)
+	if userPO == nil {
+		return nil, fmt.Errorf("User %s not found", username)
+	}
+
+	return r.UserMapper.ToDO(userPO), nil
+}
+
 func (r *UserRepository) DeleteUserByID(ctx context.Context, userID int) error {
 	return r.UserDao.DeleteByID(ctx, r.db, userID)
 }

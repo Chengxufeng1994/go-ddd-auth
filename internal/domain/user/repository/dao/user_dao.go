@@ -11,6 +11,7 @@ type IUserDao interface {
 	Save(ctx context.Context, tx *gorm.DB, po *po.User) error
 	GetByID(ctx context.Context, tx *gorm.DB, id int) (*po.User, error)
 	DeleteByID(ctx context.Context, tx *gorm.DB, id int) error
+	GetByUsername(ctx context.Context, tx *gorm.DB, username string) (*po.User, error)
 }
 
 type UserDao struct {
@@ -50,4 +51,17 @@ func (dao *UserDao) DeleteByID(ctx context.Context, tx *gorm.DB, id int) error {
 		Model(&po.User{}).
 		Where("id = ?", id).
 		Delete(&po.User{}).Error
+}
+
+func (dao *UserDao) GetByUsername(ctx context.Context, tx *gorm.DB, username string) (*po.User, error) {
+	var user po.User
+	err := tx.Debug().WithContext(ctx).
+		Model(&po.User{}).
+		Where("username = ?", username).
+		First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }

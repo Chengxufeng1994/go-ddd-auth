@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/entity/valueobject"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Aggregate root
@@ -19,7 +20,7 @@ type User struct {
 func NewUser(username, password string, role *valueobject.Role) *User {
 	return &User{
 		Username: username,
-		Password: password,
+		Password: hashPassword(password),
 		Role:     role,
 	}
 }
@@ -39,9 +40,22 @@ func (u *User) UpdateUsername(username string) {
 
 func (u *User) UpdatePassword(password string) {
 	// TODO: validate
-	u.Password = password
+	u.Password = hashPassword(password)
+}
+
+func (u *User) ValidatePassword(password string) error {
+	return comparePassword(u.Password, password)
 }
 
 func (u *User) UpdateRole(role *valueobject.Role) {
 	u.Role = role
+}
+
+func hashPassword(password string) string {
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hash)
+}
+
+func comparePassword(hashPassword, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashPassword), []byte(password))
 }

@@ -1,4 +1,4 @@
-package application
+package user
 
 import (
 	"context"
@@ -48,14 +48,14 @@ func (svc *UserApplicationService) CreateUser(ctx context.Context, cmd *command.
 	return svc.Commands.CreateUser.Handle(ctx, cmd)
 }
 
-func (svc *UserApplicationService) GetByID(ctx context.Context, q *query.GetUserByIDQuery) (*query.GetUserByIDQueryResult, error) {
-	return svc.Queries.GetUserByID.Handle(ctx, q)
-}
-
 func (svc *UserApplicationService) UpdateUser(ctx context.Context, cmd *command.UpdateUserCommand) error {
 	return svc.Commands.UpdateUser.Handle(ctx, cmd)
 }
 
 func (svc *UserApplicationService) DeleteUser(ctx context.Context, cmd *command.DeleteUserCommand) error {
 	return svc.Commands.DeleteUser.Handle(ctx, cmd)
+}
+
+func (svc *UserApplicationService) GetByID(ctx context.Context, q *query.GetUserByIDQuery) (*query.GetUserByIDQueryResult, error) {
+	return svc.Queries.GetUserByID.Handle(ctx, q)
 }

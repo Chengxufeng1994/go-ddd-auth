@@ -24,10 +24,6 @@ func (s *UserDomainService) CreateUser(ctx context.Context, user *entity.User) e
 	return s.repository.SaveUser(ctx, user)
 }
 
-func (s *UserDomainService) GetUserByID(ctx context.Context, id int) (*entity.User, error) {
-	return s.repository.GetUserByID(ctx, id)
-}
-
 func (s *UserDomainService) UpdateUser(ctx context.Context, newUser *entity.User) error {
 	return s.repository.UpdateUser(ctx, newUser.ID, func(oldUser *entity.User) (*entity.User, error) {
 		newUser.ID = oldUser.ID
@@ -48,4 +44,23 @@ func (s *UserDomainService) UpdateUser(ctx context.Context, newUser *entity.User
 
 func (s *UserDomainService) DeleteUserByID(ctx context.Context, id int) error {
 	return s.repository.DeleteUserByID(ctx, id)
+}
+
+func (s *UserDomainService) GetUserByID(ctx context.Context, id int) (*entity.User, error) {
+	return s.repository.GetUserByID(ctx, id)
+}
+
+func (s *UserDomainService) GetUserByUsername(ctx context.Context, username string) (*entity.User, error) {
+	return s.repository.GetUserByUsername(ctx, username)
+}
+
+func (s *UserDomainService) VerifyUser(ctx context.Context, username, password string) (*entity.User, error) {
+	user, err := s.repository.GetUserByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	if err := user.ValidatePassword(password); err != nil {
+		return nil, err
+	}
+	return user, nil
 }

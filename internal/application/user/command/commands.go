@@ -1,13 +1,5 @@
 package command
 
-import (
-	"context"
-)
-
-type Commands interface {
-	CreateUser(ctx context.Context, cmd *CreateUserCommand) error
-}
-
 type CreateUserCommand struct {
 	Username string
 	Password string
