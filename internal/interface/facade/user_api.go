@@ -1,6 +1,7 @@
 package facade
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -63,7 +64,13 @@ func (api *UserApi) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	cmd := command.NewUpdateUserCommand(int(userID), dto.RoleID, dto.Username, dto.Password)
+	cmd := command.NewUpdateUserCommand(
+		int(userID),
+		command.UpdateUserOpt{
+			Username: &dto.Username,
+			Password: &dto.Password,
+			RoleID:   &dto.RoleID,
+		})
 	if err := api.userApplicationService.UpdateUser(c.Request.Context(), cmd); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -86,4 +93,38 @@ func (api *UserApi) DeleteUserByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func (api *UserApi) SearchUsers(c *gin.Context) {
+	queryPage := c.DefaultQuery("page", "1")
+	querySize := c.DefaultQuery("size", "10")
+	queryOrderBy := c.DefaultQuery("orderBy", "id")
+	querySortBy := c.DefaultQuery("sortBy", "asc")
+	searchText := c.DefaultQuery("q", "")
+	page, err := strconv.Atoi(queryPage)
+	if err != nil {
+		page = 1
+	}
+	size, err := strconv.Atoi(querySize)
+	if err != nil {
+		size = 0
+	}
+
+	q := query.NewSearchUsersQuery(page, size, queryOrderBy, querySortBy, searchText)
+	fmt.Printf("%#v", q)
+	res, err := api.userApplicationService.SearchUsers(c.Request.Context(), q)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var users []*dto.UserDto
+	for _, user := range res.Users {
+		users = append(users, api.userAssembler.ToDTO(user))
+	}
+
+	c.JSON(http.StatusOK, &dto.SearchUserResponseDto{
+		Users:      users,
+		Pagination: res.Pagination,
+	})
 }

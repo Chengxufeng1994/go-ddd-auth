@@ -25,7 +25,7 @@ type VerifyTokenCommand struct {
 	TokenValue string
 }
 
-func NewVerifyCommand(tokenValue string) *VerifyTokenCommand {
+func NewVerifyTokenCommand(tokenValue string) *VerifyTokenCommand {
 	return &VerifyTokenCommand{
 		TokenValue: tokenValue,
 	}
@@ -36,21 +36,40 @@ type VerifyTokenCommandResult struct {
 	Username string
 	RoleID   int
 }
+type VerifyPermissionCommand struct {
+	RoleID   int
+	Resource string
+	Action   string
+}
+
+func NewVerifyPermissionCommand(roleID int, resource, action string) *VerifyPermissionCommand {
+	return &VerifyPermissionCommand{
+		RoleID:   roleID,
+		Resource: resource,
+		Action:   action,
+	}
+}
+
+type VerifyPermissionCommandResult struct {
+}
 
 type AuthCommands struct {
-	Login       LoginCommandHandler
-	Logout      LogoutCommandHandler
-	VerifyToken VerifyTokenCommandHandler
+	Login            LoginCommandHandler
+	Logout           LogoutCommandHandler
+	VerifyToken      VerifyTokenCommandHandler
+	VerifyPermission VerifyPermissionCommandHandler
 }
 
 func NewAuthCommands(
 	login LoginCommandHandler,
 	logout LogoutCommandHandler,
 	verifyToken VerifyTokenCommandHandler,
+	verifyPermission VerifyPermissionCommandHandler,
 ) *AuthCommands {
 	return &AuthCommands{
-		Login:       login,
-		Logout:      logout,
-		VerifyToken: verifyToken,
+		Login:            login,
+		Logout:           logout,
+		VerifyToken:      verifyToken,
+		VerifyPermission: verifyPermission,
 	}
 }

@@ -1,0 +1,43 @@
+package cache
+
+import (
+	"errors"
+	"time"
+)
+
+// ErrKeyNotFound is the error when the given key is not found
+var ErrKeyNotFound = errors.New("key not found")
+
+// Cache is a representation of a cache store that aims to replace cache.Cache
+type Cache interface {
+	// Purge is used to completely clear the cache.
+	Purge() error
+
+	// SetWithDefaultExpiry adds the given key and value to the store with the default expiry. If
+	// the key already exists, it will overwrite the previous value
+	SetWithDefaultExpiry(key string, value any) error
+
+	// SetWithExpiry adds the given key and value to the cache with the given expiry. If the key
+	// already exists, it will overwrite the previous value
+	SetWithExpiry(key string, value any, ttl time.Duration) error
+
+	// Get the content stored in the cache for the given key, and decode it into the value interface.
+	// Returns ErrKeyNotFound if the key is missing from the cache
+	Get(key string, value any) error
+
+	// GetMulti returns values for multiple keys in a single operation.
+	// Returns ErrKeyNotFound if the key is missing from the cache.
+	GetMulti(keys []string, values []any) []error
+
+	// Remove deletes the value for a given key.
+	Remove(key string) error
+
+	// RemoveMulti deletes multiple keys in a single operation.
+	RemoveMulti(keys []string) error
+
+	// Name returns the name of the cache
+	Name() string
+
+	//
+	Close() error
+}

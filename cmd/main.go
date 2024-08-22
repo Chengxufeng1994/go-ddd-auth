@@ -1,73 +1,100 @@
 package main
 
 import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	authapplication "github.com/Chengxufeng1994/go-ddd-auth/internal/application/auth"
-
-	roledao "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/role/repository/dao"
-	rolepersistence "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/role/repository/persistence"
-	rolepo "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/role/repository/po"
-	roledomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/role/service"
-
-	tokenpersistence "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/token/repository/persistence"
-	tokendomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/token/service"
-
 	userapplication "github.com/Chengxufeng1994/go-ddd-auth/internal/application/user"
-	userdao "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/repository/dao"
-	userpersistence "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/repository/persistence"
-	userpo "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/repository/po"
-	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/service"
 
-	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructue/badger"
-	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructue/token/jwt"
+	iamservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/service"
+
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/cache/badger"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/persistence"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/persistence/cachelayer"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/persistence/dao"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/persistence/po"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/persistence/timerlayer"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/rbac"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/token/jwt"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/transaction"
 	"github.com/Chengxufeng1994/go-ddd-auth/internal/interface/facade"
 	"github.com/Chengxufeng1994/go-ddd-auth/internal/interface/middleware"
 
+	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
+func initPO(db *gorm.DB) {
+	if err := db.AutoMigrate(&po.Role{}, &po.User{}); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
-	db, err := gorm.Open(postgres.New(postgres.Config{
-		DSN:                  "user=postgres password=P@ssw0rd dbname=postgres host=10.1.5.7 port=31970 sslmode=disable TimeZone=UTC search_path=go_ddd_auth",
-		PreferSimpleProtocol: true, // disables implicit prepared statement usage
-	}), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("data/license.db"), &gorm.Config{})
 	if err != nil {
 		panic(err)
 	}
-	db.AutoMigrate(&rolepo.Role{}, &userpo.User{})
+	initPO(db)
 
-	badgerDB, err := badger.NewBadger("", badger.WithPath("/tmp/badger"))
+	badgerDB, err := badger.NewBadger("", badger.WithPath("data/badger"))
 	if err != nil {
 		panic(err)
 	}
 	defer badgerDB.Close()
 
-	roleDao := roledao.NewRoleDao(db)
-	roleRepository := rolepersistence.NewRoleRepository(db, roleDao)
-	roleDomainService := roledomainservice.NewRoleDomainService(roleRepository)
+	casbinEnforcer, err := rbac.NewCasbinEnforcer("config/model.conf", "config/policy.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer casbinEnforcer.StopAutoLoadPolicy()
 
-	userDao := userdao.NewUserDao(db)
-	userRepository := userpersistence.NewUserRepository(db, userDao)
-	userDomainService := userdomainservice.NewUserDomainService(userRepository)
-	userApplicationService := userapplication.NewUserApplicationService(userDomainService, roleDomainService)
+	casbinAdapter := rbac.NewCasbinAdapter(casbinEnforcer)
+
+	dbFactory := transaction.NewDefaultDBFactory(db)
+	trxMgr := transaction.NewGormTransactionManager(dbFactory)
+
+	passwordDomainService := iamservice.NewPasswordDomainService()
+
+	roleDao := dao.NewRoleDao(db)
+	roleRepository := persistence.NewRbacRepository(db, roleDao)
+	roleDomainService := iamservice.NewRbacDomainService(roleRepository, casbinAdapter)
+
+	userDao := dao.NewUserDao(db)
+	userRepository := timerlayer.NewTimerLayer(
+		cachelayer.NewUserCacheLayer(
+			persistence.NewUserRepository(dbFactory, userDao), badgerDB),
+	)
+	userDomainService := iamservice.NewUserDomainService(userRepository)
+	userApplicationService := userapplication.NewUserApplicationService(userRepository, userDomainService, passwordDomainService, roleDomainService, trxMgr)
 
 	secretKey := []byte("secret")
 	tokenEnhancer := jwt.NewJwtTokenEnhancer(secretKey)
-	tokenRepository := tokenpersistence.NewTokenRepository(badgerDB)
+	tokenRepository := persistence.NewTokenRepository(badgerDB)
 
-	authDomainService := tokendomainservice.NewTokenDomainService(tokenEnhancer, tokenRepository)
-	authApplicationService := authapplication.NewAuthApplicationService(authDomainService, userDomainService)
+	authDomainService := iamservice.NewTokenDomainService(tokenEnhancer, tokenRepository)
+	authApplicationService := authapplication.NewAuthApplicationService(authDomainService, userDomainService, passwordDomainService, roleDomainService, casbinAdapter)
 
 	userApi := facade.NewUserApi(userApplicationService)
 	authApi := facade.NewAuthApi(authApplicationService)
 
-	authMiddleware := middleware.NewAuthenticateMiddleware(authApplicationService)
+	authnMiddleware := middleware.NewAuthenticateMiddleware(authApplicationService)
+	authzMiddleware := middleware.NewAuthorizeMiddleware(authApplicationService)
 
 	r := gin.New()
-	r.Use(gin.Recovery())
-	r.Use(gin.Logger())
-	r.Use(middleware.CORSMiddleware())
+	r.Use(
+		gin.Logger(),
+		gin.Recovery(),
+		middleware.CORSMiddleware(),
+	)
 
 	api := r.Group("/api")
 	// public route
@@ -77,12 +104,36 @@ func main() {
 	auth.POST("/refresh_token")
 
 	// private route
-	user := api.Group("/users")
-	user.Use(authMiddleware.Middleware())
+	privateRoute := api.Group("/")
+	privateRoute.Use(authnMiddleware.Middleware(), authzMiddleware.Middleware())
+	user := privateRoute.Group("/users")
 	user.POST("/", userApi.CreateUser)
-	user.GET("/:user_id", userApi.GetUserByID)
+	user.GET("/", userApi.SearchUsers)
 	user.PUT("/:user_id", userApi.UpdateUser)
+	user.GET("/:user_id", userApi.GetUserByID)
 	user.DELETE("/:user_id", userApi.DeleteUserByID)
 
-	r.Run("0.0.0.0:8080")
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("server forced to shutdown: %v", err)
+	}
+
+	log.Println("server exiting")
 }

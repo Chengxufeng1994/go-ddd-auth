@@ -5,16 +5,18 @@ import (
 
 	"github.com/Chengxufeng1994/go-ddd-auth/internal/application/user/command"
 	"github.com/Chengxufeng1994/go-ddd-auth/internal/application/user/query"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/transaction"
 
-	roledomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/role/service"
-	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/service"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/repository/facade"
+	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/service"
 )
 
 type UserUseCase interface {
-	GetByID(ctx context.Context, query *query.GetUserByIDQuery) (*query.GetUserByIDQueryResult, error)
 	CreateUser(ctx context.Context, cmd *command.CreateUserCommand) error
 	UpdateUser(ctx context.Context, cmd *command.UpdateUserCommand) error
 	DeleteUser(ctx context.Context, cmd *command.DeleteUserCommand) error
+	GetByID(ctx context.Context, query *query.GetUserByIDQuery) (*query.GetUserByIDQueryResult, error)
+	SearchUsers(ctx context.Context, query *query.SearchUsersQuery) (*query.SearchUsersQueryResult, error)
 }
 
 type UserApplicationService struct {
@@ -24,19 +26,30 @@ type UserApplicationService struct {
 
 var _ UserUseCase = (*UserApplicationService)(nil)
 
-func NewUserApplicationService(userDomainService *userdomainservice.UserDomainService, roleDomainService *roledomainservice.RoleDomainService) *UserApplicationService {
-	createUserHandler := command.NewCreateUserHandler(roleDomainService, userDomainService)
-	updateUserHandler := command.NewUpdateUserHandler(roleDomainService, userDomainService)
+func NewUserApplicationService(
+	userRepository facade.UserRepository,
+	userDomainService *userdomainservice.UserDomainService,
+	passwordDomainService *userdomainservice.PasswordDomainService,
+	rbacDomainServcie *userdomainservice.RBACDomainService,
+	trxMgr transaction.TransactionManager,
+) *UserApplicationService {
+
+	createUserHandler := command.NewCreateUserHandler(userRepository, userDomainService, passwordDomainService, rbacDomainServcie, trxMgr)
+	updateUserHandler := command.NewUpdateUserHandler(userRepository, userDomainService, passwordDomainService, rbacDomainServcie, trxMgr)
 	deleteUserHandler := command.NewDeleteUserHandler(userDomainService)
 
 	getUserByIDHandler := query.NewGetUserByIDHandler(userDomainService)
+	searchUsersHandler := query.NewSearchUsersHandler(userDomainService)
 
 	userCommands := command.NewUserCommands(
 		createUserHandler,
 		updateUserHandler,
 		deleteUserHandler,
 	)
-	userQueries := query.NewUserQueries(getUserByIDHandler)
+	userQueries := query.NewUserQueries(
+		getUserByIDHandler,
+		searchUsersHandler,
+	)
 
 	return &UserApplicationService{
 		Commands: userCommands,
@@ -58,4 +71,8 @@ func (svc *UserApplicationService) DeleteUser(ctx context.Context, cmd *command.
 
 func (svc *UserApplicationService) GetByID(ctx context.Context, q *query.GetUserByIDQuery) (*query.GetUserByIDQueryResult, error) {
 	return svc.Queries.GetUserByID.Handle(ctx, q)
+}
+
+func (svc *UserApplicationService) SearchUsers(ctx context.Context, query *query.SearchUsersQuery) (*query.SearchUsersQueryResult, error) {
+	return svc.Queries.SearchUsers.Handle(ctx, query)
 }

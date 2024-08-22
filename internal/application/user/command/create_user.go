@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	roledomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/role/service"
-
-	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/entity"
-	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/entity/valueobject"
-	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/service"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/aggregate"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/repository/facade"
+	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/service"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/valueobject"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/infrastructure/transaction"
 )
 
 type CreateUserCommandHandler interface {
@@ -16,30 +16,66 @@ type CreateUserCommandHandler interface {
 }
 
 type createUserHandler struct {
-	roleDomainService *roledomainservice.RoleDomainService
-	userDomainService *userdomainservice.UserDomainService
+	userRepository        facade.UserRepository
+	rbacDomainService     *userdomainservice.RBACDomainService
+	userDomainService     *userdomainservice.UserDomainService
+	passwordDomainService *userdomainservice.PasswordDomainService
+	trxMgr                transaction.TransactionManager
 }
 
 var _ CreateUserCommandHandler = (*createUserHandler)(nil)
 
 func NewCreateUserHandler(
-	roleDomainService *roledomainservice.RoleDomainService,
+	userRepository facade.UserRepository,
 	userDomainService *userdomainservice.UserDomainService,
+	passwordDomainService *userdomainservice.PasswordDomainService,
+	rbacDomainService *userdomainservice.RBACDomainService,
+	trxMgr transaction.TransactionManager,
 ) *createUserHandler {
 	return &createUserHandler{
-		roleDomainService: roleDomainService,
-		userDomainService: userDomainService,
+		userRepository:        userRepository,
+		userDomainService:     userDomainService,
+		passwordDomainService: passwordDomainService,
+		rbacDomainService:     rbacDomainService,
+		trxMgr:                trxMgr,
 	}
 }
 
+// TODO: add transaction in this use case
 func (h *createUserHandler) Handle(ctx context.Context, cmd *CreateUserCommand) error {
-	// TODO: check if role exists (roleDomainService)
-	isExists, err := h.roleDomainService.Exists(ctx, cmd.RoleID)
-	if err != nil || isExists == false {
-		return fmt.Errorf("role %d not exists", cmd.RoleID)
-	}
+	return h.trxMgr.Do(ctx, func(ctx context.Context) error {
+		ok, err := h.rbacDomainService.ExistingRole(ctx, cmd.RoleID)
+		if err != nil || !ok {
+			return fmt.Errorf("role %d not exists", cmd.RoleID)
+		}
 
-	role := valueobject.NewRole(cmd.RoleID)
-	user := entity.NewUser(cmd.Username, cmd.Password, role)
-	return h.userDomainService.CreateUser(ctx, user)
+		hashedPassword, err := h.passwordDomainService.EncryptPassword(cmd.Password)
+		if err != nil {
+			return fmt.Errorf("password encrypt error: %w", err)
+		}
+
+		existingUser, err := h.userRepository.GetUserByUsername(ctx, cmd.Username)
+		if err != nil {
+			return fmt.Errorf("user %s already exists", cmd.Username)
+		}
+		if existingUser != nil {
+			return fmt.Errorf("user %s already exists", cmd.Username)
+		}
+
+		roleID, _ := valueobject.NewRoleID(cmd.RoleID)
+		user, err := aggregate.NewUser(cmd.Username, hashedPassword, &roleID)
+		if err != nil {
+			return err
+		}
+
+		user.Create()
+
+		err = h.userRepository.Save(ctx, user)
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	}, transaction.PropagationRequired)
 }

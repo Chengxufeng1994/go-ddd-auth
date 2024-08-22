@@ -3,7 +3,7 @@ package command
 import (
 	"context"
 
-	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/service"
+	userdomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/service"
 )
 
 type DeleteUserCommandHandler interface {

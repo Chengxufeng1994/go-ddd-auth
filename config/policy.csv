@@ -1,0 +1,5 @@
+p, admin, *, *
+p, user, /api/users/, read
+p, user, /api/users/:id, read
+p, user, /api/users/:id, update
+p, user, /api/users/:id, delete

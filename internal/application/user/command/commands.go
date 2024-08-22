@@ -14,19 +14,21 @@ func NewCreateUserCommand(username string, password string, roleID int) *CreateU
 	}
 }
 
-type UpdateUserCommand struct {
-	UserID   int
-	Username string
-	Password string
-	RoleID   int
+type UpdateUserOpt struct {
+	Username *string
+	Password *string
+	RoleID   *int
 }
 
-func NewUpdateUserCommand(userID, roleID int, username, password string) *UpdateUserCommand {
+type UpdateUserCommand struct {
+	userID int
+	opt    UpdateUserOpt
+}
+
+func NewUpdateUserCommand(userID int, opt UpdateUserOpt) *UpdateUserCommand {
 	return &UpdateUserCommand{
-		UserID:   userID,
-		Username: username,
-		Password: password,
-		RoleID:   roleID,
+		userID: userID,
+		opt:    opt,
 	}
 }
 

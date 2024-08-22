@@ -3,7 +3,7 @@ package query
 import (
 	"context"
 
-	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/user/service"
+	"github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/service"
 )
 
 type GetUserByIDQueryHandler interface {

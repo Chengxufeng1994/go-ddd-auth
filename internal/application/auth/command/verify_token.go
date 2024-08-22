@@ -3,7 +3,7 @@ package command
 import (
 	"context"
 
-	tokendomainservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/token/service"
+	identityaccessmgmtservice "github.com/Chengxufeng1994/go-ddd-auth/internal/domain/identity_access_mgmt/service"
 )
 
 type VerifyTokenCommandHandler interface {
@@ -11,12 +11,12 @@ type VerifyTokenCommandHandler interface {
 }
 
 type verifyTokenHandler struct {
-	tokenDomainService *tokendomainservice.TokenDomainService
+	tokenDomainService *identityaccessmgmtservice.TokenDomainService
 }
 
 var _ VerifyTokenCommandHandler = (*verifyTokenHandler)(nil)
 
-func NewVerifyTokenHandler(tokenDomainService *tokendomainservice.TokenDomainService) VerifyTokenCommandHandler {
+func NewVerifyTokenHandler(tokenDomainService *identityaccessmgmtservice.TokenDomainService) VerifyTokenCommandHandler {
 	return &verifyTokenHandler{
 		tokenDomainService: tokenDomainService,
 	}

@@ -5,7 +5,7 @@ import "time"
 type UserDto struct {
 	ID        int       `json:"id"`
 	Username  string    `json:"username"`
-	Password  string    `json:"password"`
+	Password  string    `json:"-"`
 	RoleID    int       `json:"role_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
